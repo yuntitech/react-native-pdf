@@ -6,6 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#ifndef RCTPdfView_h
+#define RCTPdfView_h
+
 #if __has_include(<React/RCTAssert.h>)
 #import <React/RCTEventDispatcher.h>
 #import <React/UIView+React.h>
@@ -17,23 +20,22 @@
 
 @class RCTEventDispatcher;
 
-@interface WPdfView : UIView
+@interface RCTPdfView : UIView <UIGestureRecognizerDelegate>
 
 @property(nonatomic, strong) NSString *path;
 @property(nonatomic) int page;
+@property(nonatomic) float scale;
 @property(nonatomic) BOOL horizontal;
-@property(nonatomic) BOOL fitWidth;
+@property(nonatomic) BOOL enablePaging;
+@property(nonatomic) BOOL enableRTL;
+@property(nonatomic) int fitPolicy;
 @property(nonatomic) int spacing;
 @property(nonatomic, strong) NSString *password;
 
 
 @property(nonatomic, copy) RCTBubblingEventBlock onChange;
 
-- (void)loadPdf;
-- (void)updateBounds;
-- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView;
-- (void)scrollViewWillEndDragging:(CGPoint)velocity targetContentOffset:(inout CGPoint *)targetContentOffset;
-- (void)scrollViewDidScroll:(UIScrollView *)scrollView;
-- (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView;
 
 @end
+
+#endif /* RCTPdfView_h */
