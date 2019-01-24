@@ -10,15 +10,20 @@ import * as React from 'react';
 import * as ReactNative from 'react-native';
 
 interface Props {
-    style?: ReactNative.ViewStyle,
+    style?: ReactNative.StyleProp<ReactNative.ViewStyle>,
     source: object,
     page?: number,
     scale?: number,
+    minScale?: number,
+    maxScale?: number,
     horizontal?: boolean,
     spacing?: number,
     password?: string,
     activityIndicator?: any,
     enableAntialiasing?: boolean,
+    enablePaging?: boolean,
+    enableRTL?: boolean,
+    enableAnnotationRendering?: boolean,
     fitPolicy?: number,
     onLoadProgress?: (percent: number,) => void,
     onLoadComplete?: (numberOfPages: number, path: string) => void,

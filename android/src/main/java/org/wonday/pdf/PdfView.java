@@ -29,7 +29,9 @@ import com.github.barteksc.pdfviewer.listener.OnErrorListener;
 import com.github.barteksc.pdfviewer.listener.OnRenderListener;
 import com.github.barteksc.pdfviewer.listener.OnTapListener;
 import com.github.barteksc.pdfviewer.listener.OnDrawListener;
+import com.github.barteksc.pdfviewer.listener.OnPageScrollListener;
 import com.github.barteksc.pdfviewer.util.FitPolicy;
+import com.github.barteksc.pdfviewer.util.Constants;
 
 import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.ReactContext;
@@ -47,17 +49,24 @@ import com.facebook.react.common.ReactConstants;
 import static java.lang.String.format;
 import java.lang.ClassCastException;
 
+import com.shockwave.pdfium.PdfDocument;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
-public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompleteListener,OnErrorListener,OnTapListener,OnDrawListener {
+public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompleteListener,OnErrorListener,OnTapListener,OnDrawListener,OnPageScrollListener {
     private ThemedReactContext context;
     private int page = 1;               // start from 1
     private boolean horizontal = false;
     private float scale = 1;
+    private float minScale = 1;
+    private float maxScale = 3;
     private String asset;
     private String path;
     private int spacing = 10;
     private String password = "";
     private boolean enableAntialiasing = true;
+    private boolean enableAnnotationRendering = true;
+
     private boolean enablePaging = false;
     private boolean autoSpacing = false;
     private boolean pageFling = false;
@@ -97,17 +106,22 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     public void loadComplete(int numberOfPages) {
         float width = this.getWidth();
         float height = this.getHeight();
-
+        
         this.zoomTo(this.scale);
-
         WritableMap event = Arguments.createMap();
-        event.putString("message", "loadComplete|"+numberOfPages+"|"+width+"|"+height);
+        
+        //create a new jason Object for the TableofContents
+        Gson gson = new Gson();
+        event.putString("message", "loadComplete|"+numberOfPages+"|"+width+"|"+height+"|"+gson.toJson(this.getTableOfContents()));
         ReactContext reactContext = (ReactContext)this.getContext();
         reactContext.getJSModule(RCTEventEmitter.class).receiveEvent(
             this.getId(),
             "topChange",
             event
          );
+        
+        //Log.e("ReactNative", gson.toJson(this.getTableOfContents()));
+
     }
 
     @Override
@@ -128,7 +142,20 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     }
 
     @Override
+    public void onPageScrolled(int page, float positionOffset){
+
+        // maybe change by other instance, restore zoom setting
+        Constants.Pinch.MINIMUM_ZOOM = this.minScale;
+        Constants.Pinch.MAXIMUM_ZOOM = this.maxScale;
+
+    }
+
+    @Override
     public boolean onTap(MotionEvent e){
+
+        // maybe change by other instance, restore zoom setting
+        Constants.Pinch.MINIMUM_ZOOM = this.minScale;
+        Constants.Pinch.MAXIMUM_ZOOM = this.maxScale;
 
         WritableMap event = Arguments.createMap();
         event.putString("message", "pageSingleTap|"+page);
@@ -149,6 +176,11 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
     public void onLayerDrawn(Canvas canvas, float pageWidth, float pageHeight, int displayedPage){
 
         if (lastPageWidth>0 && lastPageHeight>0 && (pageWidth!=lastPageWidth || pageHeight!=lastPageHeight)) {
+
+            // maybe change by other instance, restore zoom setting
+            Constants.Pinch.MINIMUM_ZOOM = this.minScale;
+            Constants.Pinch.MAXIMUM_ZOOM = this.maxScale;
+
             WritableMap event = Arguments.createMap();
             event.putString("message", "scaleChanged|"+(pageWidth/lastPageWidth));
 
@@ -170,6 +202,14 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
         showLog(format("drawPdf path:%s %s", this.path, this.page));
 
         if (this.path != null){
+
+            // set scale
+            this.setMinZoom(this.minScale);
+            this.setMaxZoom(this.maxScale);
+            this.setMidZoom((this.maxScale+this.minScale)/2);
+            Constants.Pinch.MINIMUM_ZOOM = this.minScale;
+            Constants.Pinch.MAXIMUM_ZOOM = this.maxScale;
+
             this.fromUri(getURI(this.path))
                 .defaultPage(this.page-1)
                 .swipeHorizontal(this.horizontal)
@@ -178,6 +218,7 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
                 .onError(this)
                 .onTap(this)
                 .onDraw(this)
+                .onPageScroll(this)
                 .spacing(this.spacing)
                 .password(this.password)
                 .enableAntialiasing(this.enableAntialiasing)
@@ -185,6 +226,7 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
                 .pageSnap(this.pageSnap)
                 .autoSpacing(this.autoSpacing)
                 .pageFling(this.pageFling)
+                .enableAnnotationRendering(this.enableAnnotationRendering)
                 .load();
 
         }
@@ -203,6 +245,14 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
         this.scale = scale;
     }
 
+    public void setMinScale(float minScale) {
+        this.minScale = minScale;
+    }
+
+    public void setMaxScale(float maxScale) {
+        this.maxScale = maxScale;
+    }
+
     public void setHorizontal(boolean horizontal) {
         this.horizontal = horizontal;
     }
@@ -217,6 +267,10 @@ public class PdfView extends PDFView implements OnPageChangeListener,OnLoadCompl
 
     public void setEnableAntialiasing(boolean enableAntialiasing) {
         this.enableAntialiasing = enableAntialiasing;
+    }
+
+    public void setEnableAnnotationRendering(boolean enableAnnotationRendering) {
+        this.enableAnnotationRendering = enableAnnotationRendering;
     }
 
     public void setEnablePaging(boolean enablePaging) {

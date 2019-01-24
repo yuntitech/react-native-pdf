@@ -41,6 +41,7 @@ const float MIN_SCALE = 1.0f;
 {
     PDFDocument *_pdfDocument;
     PDFView *_pdfView;
+    PDFOutline *root;
     float _fixScaleFactor;
     bool _initialed;
     NSArray<NSString *> *_changedProps;
@@ -51,14 +52,24 @@ const float MIN_SCALE = 1.0f;
 {
     self = [super init];
     if (self) {
-
+        
+        _page = 1;
+        _scale = 1;
+        _minScale = MIN_SCALE;
+        _maxScale = MAX_SCALE;
+        _horizontal = NO;
+        _enablePaging = NO;
+        _enableRTL = NO;
+        _enableAnnotationRendering = YES;
+        _fitPolicy = 2;
+        _spacing = 10;
+        
         // init and config PDFView
         _pdfView = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, 500, 500)];
         _pdfView.displayMode = kPDFDisplaySinglePageContinuous;
         _pdfView.autoScales = YES;
         _pdfView.displaysPageBreaks = YES;
-        _pdfView.displayBox = kPDFDisplayBoxMediaBox;
-        _pdfView.backgroundColor = [UIColor colorWithRed:0.875 green:0.875 blue:0.875 alpha:1.0]; //#EEE
+        _pdfView.displayBox = kPDFDisplayBoxCropBox;
         
         _fixScaleFactor = -1.0f;
         _initialed = NO;
@@ -66,13 +77,16 @@ const float MIN_SCALE = 1.0f;
         
         [self addSubview:_pdfView];
         
-
+        
         // register notification
         NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
         [center addObserver:self selector:@selector(onDocumentChanged:) name:PDFViewDocumentChangedNotification object:_pdfView];
         [center addObserver:self selector:@selector(onPageChanged:) name:PDFViewPageChangedNotification object:_pdfView];
         [center addObserver:self selector:@selector(onScaleChanged:) name:PDFViewScaleChangedNotification object:_pdfView];
-
+        
+        [[_pdfView document] setDelegate: self];
+        
+        
         [self bindTap];
     }
     
@@ -82,13 +96,13 @@ const float MIN_SCALE = 1.0f;
 - (void)didSetProps:(NSArray<NSString *> *)changedProps
 {
     if (!_initialed) {
-
+        
         _changedProps = changedProps;
-
+        
     } else {
-
+        
         if ([changedProps containsObject:@"path"]) {
-
+            
             NSURL *fileURL = [NSURL fileURLWithPath:_path];
             
             if (_pdfDocument != Nil) {
@@ -130,11 +144,23 @@ const float MIN_SCALE = 1.0f;
         if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enableRTL"])) {
             _pdfView.displaysRTL = _enableRTL;
         }
-
-        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"fitPolicy"])) {
+        
+        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enableAnnotationRendering"])) {
+            if (!_enableAnnotationRendering) {
+                for (unsigned long i=0; i<_pdfView.document.pageCount; i++) {
+                    PDFPage *pdfPage = [_pdfView.document pageAtIndex:i];
+                    for (unsigned long j=0; j<pdfPage.annotations.count; j++) {
+                        [pdfPage removeAnnotation:pdfPage.annotations[j]];
+                        //pdfPage.annotations[j].shouldDisplay = _enableAnnotationRendering;
+                    }
+                }
+            }
+        }
+        
+        if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"fitPolicy"] || [changedProps containsObject:@"minScale"] || [changedProps containsObject:@"maxScale"])) {
             
-            PDFPage *pdfPage = [_pdfDocument pageAtIndex:0];
-            CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxMediaBox];
+            PDFPage *pdfPage = [_pdfDocument pageAtIndex:_pdfDocument.pageCount-1];
+            CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
             
             // some pdf with rotation, then adjust it
             if (pdfPage.rotation == 90 || pdfPage.rotation == 270) {
@@ -144,29 +170,29 @@ const float MIN_SCALE = 1.0f;
             if (_fitPolicy == 0) {
                 _fixScaleFactor = self.frame.size.width/pdfPageRect.size.width;
                 _pdfView.scaleFactor = _scale * _fixScaleFactor;
-                _pdfView.minScaleFactor = _fixScaleFactor*MIN_SCALE;
-                _pdfView.maxScaleFactor = _fixScaleFactor*MAX_SCALE;
+                _pdfView.minScaleFactor = _fixScaleFactor*_minScale;
+                _pdfView.maxScaleFactor = _fixScaleFactor*_maxScale;
             } else if (_fitPolicy == 1) {
                 _fixScaleFactor = self.frame.size.height/pdfPageRect.size.height;
                 _pdfView.scaleFactor = _scale * _fixScaleFactor;
-                _pdfView.minScaleFactor = _fixScaleFactor*MIN_SCALE;
-                _pdfView.maxScaleFactor = _fixScaleFactor*MAX_SCALE;
+                _pdfView.minScaleFactor = _fixScaleFactor*_minScale;
+                _pdfView.maxScaleFactor = _fixScaleFactor*_maxScale;
             } else {
                 float pageAspect = pdfPageRect.size.width/pdfPageRect.size.height;
                 float reactViewAspect = self.frame.size.width/self.frame.size.height;
                 if (reactViewAspect>pageAspect) {
                     _fixScaleFactor = self.frame.size.height/pdfPageRect.size.height;
                     _pdfView.scaleFactor = _scale * _fixScaleFactor;
-                    _pdfView.minScaleFactor = _fixScaleFactor*MIN_SCALE;
-                    _pdfView.maxScaleFactor = _fixScaleFactor*MAX_SCALE;
+                    _pdfView.minScaleFactor = _fixScaleFactor*_minScale;
+                    _pdfView.maxScaleFactor = _fixScaleFactor*_maxScale;
                 } else {
                     _fixScaleFactor = self.frame.size.width/pdfPageRect.size.width;
                     _pdfView.scaleFactor = _scale * _fixScaleFactor;
-                    _pdfView.minScaleFactor = _fixScaleFactor*MIN_SCALE;
-                    _pdfView.maxScaleFactor = _fixScaleFactor*MAX_SCALE;
+                    _pdfView.minScaleFactor = _fixScaleFactor*_minScale;
+                    _pdfView.maxScaleFactor = _fixScaleFactor*_maxScale;
                 }
             }
-
+            
         }
         
         if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"scale"])) {
@@ -192,12 +218,12 @@ const float MIN_SCALE = 1.0f;
                 [_pdfView usePageViewController:NO withViewOptions:Nil];
             }
         }
-
+        
         if (_pdfDocument && ([changedProps containsObject:@"path"] || [changedProps containsObject:@"enablePaging"] || [changedProps containsObject:@"horizontal"] || [changedProps containsObject:@"page"])) {
             
             PDFPage *pdfPage = [_pdfDocument pageAtIndex:_page-1];
             if (pdfPage) {
-                CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxMediaBox];
+                CGRect pdfPageRect = [pdfPage boundsForBox:kPDFDisplayBoxCropBox];
                 
                 // some pdf with rotation, then adjust it
                 if (pdfPage.rotation == 90 || pdfPage.rotation == 270) {
@@ -210,7 +236,7 @@ const float MIN_SCALE = 1.0f;
                 _pdfView.scaleFactor = _fixScaleFactor*_scale;
             }
         }
-
+        
         
         [_pdfView layoutDocumentView];
         [self setNeedsDisplay];
@@ -221,7 +247,7 @@ const float MIN_SCALE = 1.0f;
 - (void)reactSetFrame:(CGRect)frame
 {
     [super reactSetFrame:frame];
-    _pdfView.frame = frame;
+    _pdfView.frame = CGRectMake(0, 0, frame.size.width, frame.size.height);
     
     _initialed = YES;
     
@@ -237,7 +263,7 @@ const float MIN_SCALE = 1.0f;
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PDFViewDocumentChangedNotification" object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PDFViewPageChangedNotification" object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PDFViewScaleChangedNotification" object:nil];
-
+    
 }
 
 #pragma mark notification process
@@ -245,12 +271,101 @@ const float MIN_SCALE = 1.0f;
 {
     
     if (_pdfDocument) {
+        
         unsigned long numberOfPages = _pdfDocument.pageCount;
-        PDFPage *page = [_pdfDocument pageAtIndex:0];
+        PDFPage *page = [_pdfDocument pageAtIndex:_pdfDocument.pageCount-1];
         CGSize pageSize = [_pdfView rowSizeForPage:page];
-        _onChange(@{ @"message": [[NSString alloc] initWithString:[NSString stringWithFormat:@"loadComplete|%lu|%f|%f", numberOfPages, pageSize.width, pageSize.height]]});
+        NSString *jsonString = [self getTableContents];
+        
+        _onChange(@{ @"message": [[NSString alloc] initWithString:[NSString stringWithFormat:@"loadComplete|%lu|%f|%f|%@", numberOfPages, pageSize.width, pageSize.height,jsonString]]});
     }
+    
+}
 
+-(NSString *) getTableContents
+{
+    
+    NSMutableArray<PDFOutline *> *arrTableOfContents = [[NSMutableArray alloc] init];
+    
+    if (_pdfDocument.outlineRoot) {
+        
+        PDFOutline *currentRoot = _pdfDocument.outlineRoot;
+        NSMutableArray<PDFOutline *> *stack = [[NSMutableArray alloc] init];
+        
+        [stack addObject:currentRoot];
+        
+        while (stack.count > 0) {
+            
+            PDFOutline *currentOutline = stack.lastObject;
+            [stack removeLastObject];
+            
+            if (currentOutline.label.length > 0){
+                [arrTableOfContents addObject:currentOutline];
+            }
+            
+            for ( NSInteger i= currentOutline.numberOfChildren; i > 0; i-- )
+            {
+                [stack addObject:[currentOutline childAtIndex:i-1]];
+            }
+        }
+    }
+    
+    NSMutableArray *arrParentsContents = [[NSMutableArray alloc] init];
+    
+    for ( NSInteger i= 0; i < arrTableOfContents.count; i++ )
+    {
+        PDFOutline *currentOutline = [arrTableOfContents objectAtIndex:i];
+        
+        NSInteger indentationLevel = -1;
+        
+        PDFOutline *parentOutline = currentOutline.parent;
+        
+        while (parentOutline != nil) {
+            indentationLevel += 1;
+            parentOutline = parentOutline.parent;
+        }
+        
+        if (indentationLevel == 0) {
+            
+            NSMutableDictionary *DXParentsContent = [[NSMutableDictionary alloc] init];
+            
+            [DXParentsContent setObject:[[NSMutableArray alloc] init] forKey:@"children"];
+            [DXParentsContent setObject:@"" forKey:@"mNativePtr"];
+            [DXParentsContent setObject:[NSString stringWithFormat:@"%lu", [_pdfDocument indexForPage:currentOutline.destination.page]] forKey:@"pageIdx"];
+            [DXParentsContent setObject:currentOutline.label forKey:@"title"];
+            
+            //currentOutlin
+            //mNativePtr
+            [arrParentsContents addObject:DXParentsContent];
+        }
+        else {
+            NSMutableDictionary *DXParentsContent = [arrParentsContents lastObject];
+            
+            NSMutableArray *arrChildren = [DXParentsContent valueForKey:@"children"];
+            
+            while (indentationLevel > 1) {
+                NSMutableDictionary *DXchild = [arrChildren lastObject];
+                arrChildren = [DXchild valueForKey:@"children"];
+                indentationLevel--;
+            }
+            
+            NSMutableDictionary *DXChildContent = [[NSMutableDictionary alloc] init];
+            [DXChildContent setObject:[[NSMutableArray alloc] init] forKey:@"children"];
+            [DXChildContent setObject:@"" forKey:@"mNativePtr"];
+            [DXChildContent setObject:[NSString stringWithFormat:@"%lu", [_pdfDocument indexForPage:currentOutline.destination.page]] forKey:@"pageIdx"];
+            [DXChildContent setObject:currentOutline.label forKey:@"title"];
+            [arrChildren addObject:DXChildContent];
+            
+        }
+    }
+    
+    NSError *error;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:arrParentsContents options:NSJSONWritingPrettyPrinted error:&error];
+    
+    NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    
+    return jsonString;
+    
 }
 
 - (void)onPageChanged:(NSNotification *)noti
@@ -260,7 +375,7 @@ const float MIN_SCALE = 1.0f;
         PDFPage *currentPage = _pdfView.currentPage;
         unsigned long page = [_pdfDocument indexForPage:currentPage];
         unsigned long numberOfPages = _pdfDocument.pageCount;
-        
+
         _onChange(@{ @"message": [[NSString alloc] initWithString:[NSString stringWithFormat:@"pageChanged|%lu|%lu", page+1, numberOfPages]]});
     }
     
@@ -268,7 +383,7 @@ const float MIN_SCALE = 1.0f;
 
 - (void)onScaleChanged:(NSNotification *)noti
 {
-
+    
     if (_initialed && _fixScaleFactor>0) {
         if (_scale != _pdfView.scaleFactor/_fixScaleFactor) {
             _scale = _pdfView.scaleFactor/_fixScaleFactor;
@@ -287,18 +402,21 @@ const float MIN_SCALE = 1.0f;
  */
 - (void)handleDoubleTap:(UITapGestureRecognizer *)recognizer
 {
-    
-    // one tap add scale 1.2 times
-    _scale = _scale*1.2;
-    
-    if (_scale>_pdfView.maxScaleFactor/_fixScaleFactor){
-        _scale = _pdfView.minScaleFactor/_fixScaleFactor;
+    // Cycle through min/mid/max scale factors to be consistent with Android
+    float min = _pdfView.minScaleFactor/_fixScaleFactor;
+    float max = _pdfView.maxScaleFactor/_fixScaleFactor;
+    float mid = (max - min) / 2 + min;
+    if (_scale < mid) {
+        _scale = mid;
+    } else if (_scale < max) {
+        _scale = max;
+    } else {
+        _scale = min;
     }
-    
+
     _pdfView.scaleFactor = _scale*_fixScaleFactor;
-    
-    [self setNeedsDisplay];
-    
+
+    [self setNeedsDisplay];    
 }
 
 /**
@@ -309,7 +427,7 @@ const float MIN_SCALE = 1.0f;
  */
 - (void)handleSingleTap:(UITapGestureRecognizer *)sender
 {
-
+    
     _scale = _pdfView.minScaleFactor/_fixScaleFactor;
     _pdfView.scaleFactor = _pdfView.minScaleFactor;
     
@@ -332,6 +450,15 @@ const float MIN_SCALE = 1.0f;
  */
 -(void)handlePinch:(UIPinchGestureRecognizer *)sender{
     [self onScaleChanged:Nil];
+}
+
+/**
+ *  Do nothing on long Press
+ *
+ *
+ */
+- (void)handleLongPress:(UILongPressGestureRecognizer *)sender{
+    
 }
 
 /**
@@ -362,7 +489,15 @@ const float MIN_SCALE = 1.0f;
                                                                                           action:@selector(handlePinch:)];
     [self addGestureRecognizer:pinchRecognizer];
     pinchRecognizer.delegate = self;
-
+    
+    UILongPressGestureRecognizer *longPressRecognizer = [[UILongPressGestureRecognizer alloc] initWithTarget:self
+                                                                                            action:@selector(handleLongPress:)];
+    // Making sure the allowable movement isn not too narrow
+    longPressRecognizer.allowableMovement=100;
+    // Important: The duration must be long enough to allow taps but not longer than the period in which view opens the magnifying glass
+    longPressRecognizer.minimumPressDuration=0.3;
+    
+    [self addGestureRecognizer:longPressRecognizer];
     
 }
 
