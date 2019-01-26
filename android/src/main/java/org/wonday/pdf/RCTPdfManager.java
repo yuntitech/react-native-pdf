@@ -120,6 +120,13 @@ public class RCTPdfManager extends SimpleViewManager<PdfView> {
         pdfView.setFitPolicy(fitPolicy);
     }
 
+    @ReactProp(name = "reDrawPdf")
+    public void setReDrawPdf(PdfView pdfView, boolean reDrawPdf) {
+        if (reDrawPdf && this.pdfView != null) {
+            this.pdfView.drawPdf();
+        }
+    }
+
     @Override
     public void onAfterUpdateTransaction(PdfView pdfView) {
         super.onAfterUpdateTransaction(pdfView);

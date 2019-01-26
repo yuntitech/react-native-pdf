@@ -58,6 +58,7 @@ export default class Pdf extends Component {
         onError: PropTypes.func,
         onPageSingleTap: PropTypes.func,
         onScaleChanged: PropTypes.func,
+        reDrawPdf: PropTypes.bool,
 
         // Props that are not available in the earlier react native version, added to prevent crashed on android
         accessibilityLabel: PropTypes.string,
@@ -82,6 +83,7 @@ export default class Pdf extends Component {
         enableAnnotationRendering: true,
         enablePaging: false,
         enableRTL: false,
+        reDrawPdf: false,
         activityIndicatorProps: {color: '#009900', progressTintColor: '#009900'},
         onLoadProgress: (percent) => {
         },
@@ -386,6 +388,7 @@ export default class Pdf extends Component {
                         style={[{backgroundColor: '#EEE'}, this.props.style]}
                         path={this.state.path}
                         onChange={this._onChange}
+                        reDrawPdf={this.props.reDrawPdf}
                     />
                 );
             } else if (Platform.OS === "ios") {
@@ -426,7 +429,7 @@ export default class Pdf extends Component {
 
 if (Platform.OS === "android") {
     var PdfCustom = requireNativeComponent('RCTPdf', Pdf, {
-        nativeOnly: {path: true, onChange: true},
+        nativeOnly: {path: true, onChange: true, reDrawPdf: false},
     })
 } else if (Platform.OS === "ios") {
     var PdfCustom = requireNativeComponent('RCTPdfView', Pdf, {
