@@ -32,6 +32,6 @@
         "prop-types": "^15.5.10"
     },
     "peerDependencies": {
-        "rn-fetch-blob": "*"
+        "rn-fetch-blob": "https://github.com/yuntitech/rn-fetch-blob.git#1d8066f2c95b7c1aabdb6cfc2448e8f770634cf6"
     }
 }
